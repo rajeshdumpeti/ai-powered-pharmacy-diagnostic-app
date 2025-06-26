@@ -1,31 +1,109 @@
 # app.py
 import streamlit as st
 from datetime import date
-import pandas as pd # Added for dataframe conversion for LLM input
+import pandas as pd
+import json
+import os
 
 # Import functions from your modules
 from database_ops import init_db, execute_sql_query
 from gemini_client import generate_sql_query_from_prompt, get_llm_analysis_from_data
 from prompts import LLM_SQL_GENERATION_PROMPT, LLM_PATIENT_SUMMARY_PROMPT, LLM_INVENTORY_INSIGHTS_PROMPT, LLM_REPORT_GENERATION_PROMPT
-from database_ops import add_user, verify_user # for auth
+from database_ops import add_user, verify_user
 
+
+# Define the file where session state will be saved
+SESSION_STATE_FILE = "user_session_state.json"
+
+# --- Manual Session State Load/Save Functions ---
+def load_session_state_manual():
+    """Loads specific session state variables from a JSON file."""
+    if os.path.exists(SESSION_STATE_FILE):
+        try:
+            with open(SESSION_STATE_FILE, "r") as f:
+                loaded_state = json.load(f)
+            # Apply loaded state to st.session_state
+            if "logged_in" in loaded_state:
+                st.session_state.logged_in = loaded_state["logged_in"]
+            if "username" in loaded_state:
+                st.session_state.username = loaded_state["username"]
+            # st.success("Session state loaded from file!") # Optional: for debugging
+        except json.JSONDecodeError:
+            # File exists but is corrupted, start fresh
+            st.warning("Corrupted session state file found. Starting fresh.")
+        except Exception as e:
+            st.error(f"Error loading session state: {e}. Starting fresh.")
+    # else:
+        # st.info("No saved session state found. Starting fresh.") # Optional: for debugging
+
+def save_session_state_manual():
+    """Saves specific session state variables to a JSON file."""
+    state_to_save = {
+        "logged_in": st.session_state.get("logged_in", False),
+        "username": st.session_state.get("username", "")
+    }
+    try:
+        with open(SESSION_STATE_FILE, "w") as f:
+            json.dump(state_to_save, f)
+        # st.success("Session state saved!") # Optional: for debugging
+    except Exception as e:
+        st.error(f"Error saving session state: {e}")
 
 # Call init_db at the beginning of the script to ensure tables and data exist
 init_db()
+
 
 # --- Streamlit APP Configuration ---
 st.set_page_config(page_title="Rajesh's | Pharmacy & Diagnostics SQL Assistant", page_icon="⚕️", layout="wide")
 
 st.markdown("<h1 style='text-align: center; color: #008080;'>Rajesh's Gemini App</h1>", unsafe_allow_html=True)
-st.markdown("<h3 style='text-align: center; color: #2F4F4F;'>Your AI-Powered <b>Pharmacy & Diagnostics Assistant</b></h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #2F4F4F;'>Your AI-Powered <b>Pharmacy & Diagnostics SQL Assistant</b></h3>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #696969;'>Comprehensive tool for managing pharmacy inventory and patient diagnostic data.</p>", unsafe_allow_html=True)
 
 
+# --- Custom CSS for the "Generate SQL Query & Execute" button ---
+st.markdown("""
+    <style>
+    /* Target the specific 'Generate SQL Query & Execute' button by its key */
+    button[data-testid="stButton-manual_submit_llm"] {
+        background-color: #4CAF50; /* A pleasant shade of green */
+        color: white; /* White text for good contrast */
+        padding: 12px 24px; /* Slightly more padding for a larger touch area */
+        border-radius: 8px; /* More rounded corners */
+        border: none; /* Remove default border */
+        font-size: 18px; /* Slightly larger font */
+        font-weight: bold; /* Make text bold */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Subtle shadow for depth */
+        transition: background-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease; /* Smooth transitions */
+    }
+
+    button[data-testid="stButton-manual_submit_llm"]:hover {
+        background-color: #45a049; /* Darker green on hover */
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3); /* Enhanced shadow on hover */
+        transform: translateY(-2px); /* Slight lift effect */
+    }
+
+    button[data-testid="stButton-manual_submit_llm"]:active {
+        background-color: #3e8e41; /* Even darker green when clicked */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Smaller shadow when active */
+        transform: translateY(0); /* Return to original position */
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 # --- Session State Initialization ---
+# NEW: Load persisted state at the very beginning of the app run
+load_session_state_manual()
+
+# Initialize default values if they are not already set (either by loading or app restart)
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'username' not in st.session_state:
     st.session_state.username = ""
+
+
+# Existing session state initializations (these don't need persistence for this feature)
 if 'search_input' not in st.session_state:
     st.session_state.search_input = ""
 if 'selected_drug_for_details' not in st.session_state:
@@ -34,7 +112,7 @@ if 'question_input_value' not in st.session_state:
     st.session_state.question_input_value = ""
 if 'prompt_history' not in st.session_state:
     st.session_state.prompt_history = []
-if 'trigger_submit_llm' not in st.session_state: # For NLP to SQL prompt filling
+if 'trigger_submit_llm' not in st.session_state:
     st.session_state.trigger_submit_llm = False
 
 
@@ -50,6 +128,7 @@ def login_form_ui():
             if verify_user(username, password):
                 st.session_state.logged_in = True
                 st.session_state.username = username
+                save_session_state_manual() # Save state after successful login
                 st.success(f"Logged in as {username}!")
                 st.rerun()
             else:
@@ -81,8 +160,8 @@ if not st.session_state.logged_in:
     with auth_container:
         col_left, col_center, col_right = st.columns([1, 2, 1])
         with col_center:
-            # st.markdown("<div style='background-color:#F5F5F5; padding: 20px; border-radius: 10px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
-            
+            st.markdown("<div style='background-color:#F5F5F5; padding: 20px; border-radius: 10px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
+
             auth_choice = st.radio(
                 "Already have an account or need to create one?",
                 ("Login", "Sign Up"),
@@ -96,7 +175,7 @@ if not st.session_state.logged_in:
                 login_form_ui()
             else:
                 signup_form_ui()
-            
+
             st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("<br><br>", unsafe_allow_html=True)
 else:
@@ -105,6 +184,9 @@ else:
     if st.sidebar.button("Logout", key="logout_btn"):
         st.session_state.logged_in = False
         st.session_state.username = ""
+        save_session_state_manual() # Save state after logout
+
+        # Clear other non-persisted session states as before
         st.session_state.prompt_history = []
         st.session_state.search_input = ""
         st.session_state.selected_drug_for_details = ""
@@ -113,7 +195,7 @@ else:
         st.rerun()
 
     # --- Section 1: Quick Drug Search (Type & Click) ---
-    st.header("1. Quick Drug Search (Type & Click ENTER)")
+    st.header("1. Quick Drug Search (Type & Click)")
     st.markdown("Start typing a drug name. Click on a suggestion to see its full details from the inventory.")
 
     search_term = st.text_input("Search by Drug Name or Generic Name:", key="drug_search_input", value=st.session_state.search_input)
@@ -130,7 +212,7 @@ else:
         SELECT DISTINCT GENERIC_NAME FROM PHARMACY_INVENTORY WHERE GENERIC_NAME LIKE '%{search_term}%' AND GENERIC_NAME IS NOT NULL
         LIMIT 10;
         """
-        
+
         with st.spinner("Searching for suggestions..."):
             suggestions_raw, _ = execute_sql_query(suggestion_query)
             suggestions = [s[0] for s in suggestions_raw if s[0] is not None] if suggestions_raw else []
@@ -151,11 +233,11 @@ else:
         selected_drug_name = st.session_state.selected_drug_for_details
         st.subheader(f"Details for: {selected_drug_name}")
         details_query = f"""
-        SELECT * FROM PHARMACY_INVENTORY 
+        SELECT * FROM PHARMACY_INVENTORY
         WHERE DRUG_NAME = '{selected_drug_name}' OR GENERIC_NAME = '{selected_drug_name}';
         """
         details_data, details_columns = execute_sql_query(details_query)
-        
+
         if details_data:
             if details_columns:
                 df_data = [dict(zip(details_columns, row)) for row in details_data]
@@ -175,8 +257,7 @@ else:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("<h3 style='color: #008080;'>Add New Drug to Inventory</h3>", unsafe_allow_html=True)
-        
+        st.subheader("Add New Drug to Inventory")
         with st.form("add_drug_form"):
             drug_name = st.text_input("Drug Name (e.g., 'Aspirin')", key="form_drug_name")
             generic_name = st.text_input("Generic Name (Optional, e.g., 'Acetylsalicylic Acid')", key="form_generic_name")
@@ -206,7 +287,7 @@ else:
 
 
     with col2:
-        st.markdown("<h3 style='color: #008080;'>Add New Diagnostic Record</h3>", unsafe_allow_html=True)
+        st.subheader("Add New Diagnostic Record")
         available_drugs_query = "SELECT DRUG_ID, DRUG_NAME FROM PHARMACY_INVENTORY ORDER BY DRUG_NAME ASC;"
         drug_options_raw, _ = execute_sql_query(available_drugs_query)
         drug_options = {row[1]: row[0] for row in drug_options_raw} if drug_options_raw else {}
@@ -217,7 +298,7 @@ else:
             diagnosis = st.text_input("Diagnosis (e.g., 'Hypertension')", key="form_diagnosis")
             diagnosis_date = st.date_input("Diagnosis Date", max_value=date.today(), key="form_diagnosis_date")
             test_results = st.text_area("Test Results Summary", key="form_test_results")
-            
+
             selected_drug_name_for_prescribed = st.selectbox(
                 "Drug Prescribed (Optional)",
                 options=drug_names_for_select,
@@ -254,7 +335,7 @@ else:
     if st.button(f"Delete Record from {delete_table}", key="delete_record_btn"):
         if delete_id:
             st.info(f"Attempting to delete record with ID {delete_id} from {delete_table}...")
-            
+
             delete_query = f"DELETE FROM {delete_table} WHERE {'DRUG_ID' if delete_table == 'PHARMACY_INVENTORY' else 'PATIENT_ID'} = {delete_id};"
             status_msg, _ = execute_sql_query(delete_query)
             if status_msg:
@@ -294,7 +375,7 @@ else:
                 if summary_data_raw:
                     # Convert list of tuples to list of dictionaries for better LLM context
                     summary_data_df = [dict(zip(summary_cols, row)) for row in summary_data_raw]
-                    
+
                     llm_summary = get_llm_analysis_from_data(
                         summary_data_df,
                         LLM_PATIENT_SUMMARY_PROMPT,
@@ -320,8 +401,8 @@ else:
         with st.spinner("Analyzing inventory for insights..."):
             # SQL to fetch drugs that are low in stock or expiring soon
             current_date_str = date.today().strftime('%Y-%m-%d')
-            future_date_str = (date.today() + pd.DateOffset(months=6)).strftime('%Y-%m-%d') # Using pandas for date offset
-            
+            future_date_str = (date.today() + pd.DateOffset(months=6)).strftime('%Y-%m-%d')
+
             # Query for low stock and expiring drugs
             inventory_insights_query = f"""
             SELECT DRUG_NAME, STOCK_QUANTITY, EXPIRY_DATE, SUPPLIER
@@ -333,7 +414,7 @@ else:
 
             if inventory_data_raw:
                 inventory_data_df = [dict(zip(inventory_cols, row)) for row in inventory_data_raw]
-                
+
                 llm_insights = get_llm_analysis_from_data(
                     inventory_data_df,
                     LLM_INVENTORY_INSIGHTS_PROMPT,
@@ -373,7 +454,7 @@ else:
 
                     if report_data_raw:
                         report_data_df = [dict(zip(report_cols, row)) for row in report_data_raw]
-                        
+
                         # Then, use LLM to analyze/summarize the report data
                         llm_report = get_llm_analysis_from_data(
                             report_data_df,
@@ -384,7 +465,7 @@ else:
                             st.subheader("AI-Generated Custom Report:")
                             st.write(llm_report)
                         else:
-                            st.error(llm_report) # Display LLM analysis error
+                            st.error(llm_report) # Display LLM error
                     else:
                         st.info("No data found for the specified report criteria. The generated SQL might need adjustment or the database is empty for this query.")
                 else:
@@ -395,7 +476,7 @@ else:
 
 
     # --- Section 7: Natural Language Query (Advanced) ---
-    st.header("7. Natural Language Query (Advanced)") # Updated header number
+    st.header("7. Natural Language Query (Advanced)")
     st.markdown("Type natural language questions or commands for direct SQL generation, including updates, inserts, and deletes.")
 
     user_typed_question = st.text_input(
@@ -432,11 +513,12 @@ else:
             if st.button(prompt_text, key=f"suggest_llm_{i}"):
                 set_question_only(prompt_text)
 
+    # This is the button you want to highlight
     submit_button_clicked_llm = st.button("Generate SQL Query & Execute", key="manual_submit_llm")
 
     if submit_button_clicked_llm:
         current_question_llm = st.session_state.main_input_text
-        
+
         if current_question_llm.strip() == "":
             st.warning("Please enter a query or command, or choose a suggestion.")
         else:
@@ -448,8 +530,8 @@ else:
                 st.code(generated_sql_query, language="sql")
 
                 st.subheader("Query Results/Status:")
-                
-                query_results_data, query_results_columns = execute_sql_query(generated_sql_query) 
+
+                query_results_data, query_results_columns = execute_sql_query(generated_sql_query)
 
                 history_entry = {
                     "prompt": current_question_llm,
@@ -462,7 +544,7 @@ else:
                 st.session_state.prompt_history.append(history_entry)
 
                 if query_results_data is not None:
-                    if isinstance(query_results_data, str): 
+                    if isinstance(query_results_data, str):
                         st.success(query_results_data)
                         if generated_sql_query.strip().upper().startswith(("UPDATE", "INSERT", "DELETE")):
                             st.info("The database has been modified. You can run a SELECT query to see the changes.")
