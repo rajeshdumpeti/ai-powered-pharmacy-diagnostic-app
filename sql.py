@@ -7,9 +7,9 @@ connection = sqlite3.connect("student.db")
 cursor = connection.cursor()
 
 # --- OPTIONAL: Drop all existing tables for a clean start ---
+# IMPORTANT: This will erase all existing data. Uncomment if you want to start fresh.
 cursor.execute("DROP TABLE IF EXISTS PHARMACY_INVENTORY")
-cursor.execute("DROP TABLE IF EXISTS DIAGNOSTIC_DATA") # New table to drop
-cursor.execute("DROP TABLE IF EXISTS STUDENT") # In case it was still there
+cursor.execute("DROP TABLE IF EXISTS DIAGNOSTIC_DATA")
 
 # --- Create the PHARMACY_INVENTORY table ---
 table_info_pharmacy = """
@@ -108,13 +108,15 @@ cursor.execute(table_info_diagnostic)
 # --- Generate 200 Diagnostic Records ---
 diagnostic_data = []
 patient_names = ["Amit Sharma", "Priya Singh", "Rahul Kumar", "Anjali Patel", "Vikram Reddy",
-                 "Deepa Gupta", "Rohan Mehta", "Shweta Joshi", "Arjun Desai", "Neha Verma"]
+                 "Deepa Gupta", "Rohan Mehta", "Shweta Joshi", "Arjun Desai", "Neha Verma",
+                 "Suresh Rao", "Meena Sharma", "Karan Singh", "Divya Reddy", "Rajesh Kumar",
+                 "Smita Patel", "Gaurav Gupta", "Pooja Mehta", "Sanjay Joshi", "Rina Verma"] # More Indian names added
 diagnoses = ["Hypertension", "Type 2 Diabetes", "Asthma", "Allergy", "Bacterial Infection",
-             "Migraine", "Arthritis", "Depression", "Anxiety", "Common Cold"]
+             "Migraine", "Arthritis", "Depression", "Anxiety", "Common Cold", "Thyroid Imbalance", "Pneumonia"]
 test_results_options = [
     "Blood pressure elevated", "HbA1c high", "Spirometry normal", "Allergy panel positive for pollen",
     "Culture positive for strep", "MRI clear", "X-ray shows joint inflammation", "Mood assessment stable",
-    "Panic attack reported", "Negative for flu"
+    "Panic attack reported", "Negative for flu", "Thyroid levels abnormal", "Chest X-ray shows consolidation"
 ]
 
 for i in range(1, 201): # Generate 200 records
