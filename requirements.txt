@@ -4,3 +4,5 @@ streamlit
 google-generativeai
 python-dotenv # If you added this for .env files
 bcrypt
+pandas
+streamlit-persistence

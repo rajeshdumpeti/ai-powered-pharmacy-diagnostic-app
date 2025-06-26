@@ -1,30 +1,31 @@
 # app.py
 import streamlit as st
-from datetime import date # Added for forms
+from datetime import date
+import pandas as pd # Added for dataframe conversion for LLM input
 
 # Import functions from your modules
-from database_ops import init_db, execute_sql_query, add_user, verify_user
-from gemini_client import get_gemini_response
-from prompts import LLM_PROMPT
+from database_ops import init_db, execute_sql_query
+from gemini_client import generate_sql_query_from_prompt, get_llm_analysis_from_data
+from prompts import LLM_SQL_GENERATION_PROMPT, LLM_PATIENT_SUMMARY_PROMPT, LLM_INVENTORY_INSIGHTS_PROMPT, LLM_REPORT_GENERATION_PROMPT
+from database_ops import add_user, verify_user # for auth
+
 
 # Call init_db at the beginning of the script to ensure tables and data exist
 init_db()
-
 
 # --- Streamlit APP Configuration ---
 st.set_page_config(page_title="Rajesh's | Pharmacy & Diagnostics SQL Assistant", page_icon="⚕️", layout="wide")
 
 st.markdown("<h1 style='text-align: center; color: #008080;'>Rajesh's Gemini App</h1>", unsafe_allow_html=True)
-st.markdown("<h3 style='text-align: center; color: #2F4F4F;'>Your AI-Powered <b>Pharmacy & Diagnostics SQL Assistant</b></h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #2F4F4F;'>Your AI-Powered <b>Pharmacy & Diagnostics Assistant</b></h3>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #696969;'>Comprehensive tool for managing pharmacy inventory and patient diagnostic data.</p>", unsafe_allow_html=True)
 
 
-# --- Session State Initialization for Authentication ---
+# --- Session State Initialization ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'username' not in st.session_state:
     st.session_state.username = ""
-# Existing session state initializations
 if 'search_input' not in st.session_state:
     st.session_state.search_input = ""
 if 'selected_drug_for_details' not in st.session_state:
@@ -33,9 +34,11 @@ if 'question_input_value' not in st.session_state:
     st.session_state.question_input_value = ""
 if 'prompt_history' not in st.session_state:
     st.session_state.prompt_history = []
+if 'trigger_submit_llm' not in st.session_state: # For NLP to SQL prompt filling
+    st.session_state.trigger_submit_llm = False
 
 
-# --- Authentication Logic ---
+# --- Authentication Logic (Modern UI) ---
 def login_form_ui():
     st.markdown("<h4 style='text-align: center; color: #008080;'>Login to your account</h4>", unsafe_allow_html=True)
     with st.form("login_form"):
@@ -70,42 +73,34 @@ def signup_form_ui():
             else:
                 if add_user(new_username, new_password):
                     st.success(f"Account '{new_username}' created successfully! You can now log in.")
-                    # Optionally, log them in immediately:
-                    # st.session_state.logged_in = True
-                    # st.session_state.username = new_username
-                    # st.rerun()
-                # Error messages for username exists or db error handled by add_user function
 
-# --- Display Login/Signup UI or Main App ---
+# --- Main App Logic (Conditional based on login status) ---
 if not st.session_state.logged_in:
-    st.markdown("<br>", unsafe_allow_html=True) # Add some space
-
-    # Centered container for auth forms
+    st.markdown("<br>", unsafe_allow_html=True)
     auth_container = st.container()
     with auth_container:
-        col_left, col_center, col_right = st.columns([1, 2, 1]) # Use columns to center content
+        col_left, col_center, col_right = st.columns([1, 2, 1])
         with col_center:
             # st.markdown("<div style='background-color:#F5F5F5; padding: 20px; border-radius: 10px; box-shadow: 0px 4px 8px rgba(0,0,0,0.1);'>", unsafe_allow_html=True)
             
             auth_choice = st.radio(
                 "Already have an account or need to create one?",
                 ("Login", "Sign Up"),
-                index=0, # Default to Login
+                index=0,
                 key="auth_choice_radio",
-                horizontal=True # Display radio buttons horizontally
+                horizontal=True
             )
-            st.markdown("---") # Separator
+            st.markdown("---")
 
             if auth_choice == "Login":
                 login_form_ui()
             else:
                 signup_form_ui()
             
-            st.markdown("</div>", unsafe_allow_html=True) # Close the styled div
-    
-    st.markdown("<br><br>", unsafe_allow_html=True) # More space at bottom
+            st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
 else:
-    # --- Main Application Content (Visible only if logged in) ---
+    # --- Sidebar for Logout ---
     st.sidebar.markdown(f"Welcome, **{st.session_state.username}**!", unsafe_allow_html=True)
     if st.sidebar.button("Logout", key="logout_btn"):
         st.session_state.logged_in = False
@@ -114,10 +109,11 @@ else:
         st.session_state.search_input = ""
         st.session_state.selected_drug_for_details = ""
         st.session_state.question_input_value = ""
+        st.session_state.trigger_submit_llm = False
         st.rerun()
 
     # --- Section 1: Quick Drug Search (Type & Click) ---
-    st.header("1. Quick Drug Search (Type & Click)")
+    st.header("1. Quick Drug Search (Type & Click ENTER)")
     st.markdown("Start typing a drug name. Click on a suggestion to see its full details from the inventory.")
 
     search_term = st.text_input("Search by Drug Name or Generic Name:", key="drug_search_input", value=st.session_state.search_input)
@@ -179,7 +175,8 @@ else:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Add New Drug to Inventory")
+        st.markdown("<h3 style='color: #008080;'>Add New Drug to Inventory</h3>", unsafe_allow_html=True)
+        
         with st.form("add_drug_form"):
             drug_name = st.text_input("Drug Name (e.g., 'Aspirin')", key="form_drug_name")
             generic_name = st.text_input("Generic Name (Optional, e.g., 'Acetylsalicylic Acid')", key="form_generic_name")
@@ -209,7 +206,7 @@ else:
 
 
     with col2:
-        st.subheader("Add New Diagnostic Record")
+        st.markdown("<h3 style='color: #008080;'>Add New Diagnostic Record</h3>", unsafe_allow_html=True)
         available_drugs_query = "SELECT DRUG_ID, DRUG_NAME FROM PHARMACY_INVENTORY ORDER BY DRUG_NAME ASC;"
         drug_options_raw, _ = execute_sql_query(available_drugs_query)
         drug_options = {row[1]: row[0] for row in drug_options_raw} if drug_options_raw else {}
@@ -270,9 +267,136 @@ else:
     st.markdown("---")
 
 
-    # --- Section 4: Natural Language Query (Advanced) ---
-    st.header("4. Natural Language Query (Advanced)")
-    st.markdown("Type natural language questions or commands for more complex queries across **Pharmacy Inventory** and **Diagnostic Data**.")
+    # --- Section 4: AI-Powered Patient History Summarizer ---
+    st.header("4. AI-Powered Patient History Summarizer")
+    st.markdown("Get a concise, AI-generated summary of a patient's diagnostic and medication history.")
+
+    patient_id_summary = st.number_input("Enter Patient ID for Summary:", min_value=1, step=1, key="patient_id_summary")
+    if st.button("Generate Patient Summary", key="generate_patient_summary_btn"):
+        if patient_id_summary:
+            with st.spinner(f"Generating summary for Patient ID {patient_id_summary}..."):
+                # SQL to fetch all relevant data for the patient, joining with pharmacy for drug names
+                summary_query = f"""
+                SELECT
+                    DD.PATIENT_NAME,
+                    DD.DIAGNOSIS,
+                    DD.DIAGNOSIS_DATE,
+                    DD.TEST_RESULTS,
+                    PI.DRUG_NAME,
+                    PI.DOSAGE
+                FROM DIAGNOSTIC_DATA AS DD
+                LEFT JOIN PHARMACY_INVENTORY AS PI ON DD.DRUG_ID_PRESCRIBED = PI.DRUG_ID
+                WHERE DD.PATIENT_ID = {patient_id_summary}
+                ORDER BY DD.DIAGNOSIS_DATE ASC;
+                """
+                summary_data_raw, summary_cols = execute_sql_query(summary_query)
+
+                if summary_data_raw:
+                    # Convert list of tuples to list of dictionaries for better LLM context
+                    summary_data_df = [dict(zip(summary_cols, row)) for row in summary_data_raw]
+                    
+                    llm_summary = get_llm_analysis_from_data(
+                        summary_data_df,
+                        LLM_PATIENT_SUMMARY_PROMPT,
+                        original_request=f"Summarize the health history for Patient ID {patient_id_summary}"
+                    )
+                    if llm_summary and not llm_summary.startswith("Error:"):
+                        st.subheader(f"Summary for Patient ID {patient_id_summary}:")
+                        st.write(llm_summary)
+                    else:
+                        st.error(llm_summary) # Display LLM error
+                else:
+                    st.info(f"No diagnostic data found for Patient ID {patient_id_summary}.")
+        else:
+            st.warning("Please enter a Patient ID.")
+    st.markdown("---")
+
+
+    # --- Section 5: AI-Driven Inventory Insights ---
+    st.header("5. AI-Driven Inventory Insights")
+    st.markdown("Get actionable recommendations for your pharmacy inventory based on stock levels and expiry dates.")
+
+    if st.button("Generate Inventory Insights", key="generate_inventory_insights_btn"):
+        with st.spinner("Analyzing inventory for insights..."):
+            # SQL to fetch drugs that are low in stock or expiring soon
+            current_date_str = date.today().strftime('%Y-%m-%d')
+            future_date_str = (date.today() + pd.DateOffset(months=6)).strftime('%Y-%m-%d') # Using pandas for date offset
+            
+            # Query for low stock and expiring drugs
+            inventory_insights_query = f"""
+            SELECT DRUG_NAME, STOCK_QUANTITY, EXPIRY_DATE, SUPPLIER
+            FROM PHARMACY_INVENTORY
+            WHERE STOCK_QUANTITY < 50 OR EXPIRY_DATE <= '{future_date_str}'
+            ORDER BY EXPIRY_DATE ASC, STOCK_QUANTITY ASC;
+            """
+            inventory_data_raw, inventory_cols = execute_sql_query(inventory_insights_query)
+
+            if inventory_data_raw:
+                inventory_data_df = [dict(zip(inventory_cols, row)) for row in inventory_data_raw]
+                
+                llm_insights = get_llm_analysis_from_data(
+                    inventory_data_df,
+                    LLM_INVENTORY_INSIGHTS_PROMPT,
+                    original_request="Analyze pharmacy inventory for urgent attention items"
+                )
+                if llm_insights and not llm_insights.startswith("Error:"):
+                    st.subheader("Pharmacy Inventory Insights & Recommendations:")
+                    st.write(llm_insights)
+                else:
+                    st.error(llm_insights) # Display LLM error
+            else:
+                st.info("No low stock or expiring drugs found. Inventory appears healthy!")
+    st.markdown("---")
+
+
+    # --- Section 6: Custom Data Report Generation ---
+    st.header("6. Custom Data Report Generation")
+    st.markdown("Describe the report you need, and the AI will generate the SQL, fetch data, and summarize it into a human-readable report.")
+
+    report_request = st.text_area(
+        "Describe the report you want to generate (e.g., 'Monthly sales by drug type for 2023', 'Number of patients per diagnosis this year'):",
+        key="report_request_input"
+    )
+
+    if st.button("Generate Custom Report", key="generate_custom_report_btn"):
+        if report_request.strip():
+            with st.spinner("Generating SQL and report..."):
+                # First, use LLM to generate SQL
+                sql_query_for_report = generate_sql_query_from_prompt(report_request, LLM_SQL_GENERATION_PROMPT)
+
+                if sql_query_for_report and not sql_query_for_report.startswith("Error:"):
+                    st.subheader("Generated SQL Query for Report:")
+                    st.code(sql_query_for_report, language="sql")
+
+                    # Execute the generated SQL query
+                    report_data_raw, report_cols = execute_sql_query(sql_query_for_report)
+
+                    if report_data_raw:
+                        report_data_df = [dict(zip(report_cols, row)) for row in report_data_raw]
+                        
+                        # Then, use LLM to analyze/summarize the report data
+                        llm_report = get_llm_analysis_from_data(
+                            report_data_df,
+                            LLM_REPORT_GENERATION_PROMPT,
+                            original_request=report_request
+                        )
+                        if llm_report and not llm_report.startswith("Error:"):
+                            st.subheader("AI-Generated Custom Report:")
+                            st.write(llm_report)
+                        else:
+                            st.error(llm_report) # Display LLM analysis error
+                    else:
+                        st.info("No data found for the specified report criteria. The generated SQL might need adjustment or the database is empty for this query.")
+                else:
+                    st.error(sql_query_for_report) # Display SQL generation error
+        else:
+            st.warning("Please describe the report you want to generate.")
+    st.markdown("---")
+
+
+    # --- Section 7: Natural Language Query (Advanced) ---
+    st.header("7. Natural Language Query (Advanced)") # Updated header number
+    st.markdown("Type natural language questions or commands for direct SQL generation, including updates, inserts, and deletes.")
 
     user_typed_question = st.text_input(
         "Enter your query or command:",
@@ -297,9 +421,8 @@ else:
         "Delete drug with DRUG_ID 1."
     ]
 
-    def set_question_and_submit_llm(prompt_text):
+    def set_question_only(prompt_text):
         st.session_state.question_input_value = prompt_text
-        st.session_state.trigger_submit_llm = True
         st.rerun()
 
     cols_llm_suggestions = st.columns(3)
@@ -307,22 +430,18 @@ else:
     for i, prompt_text in enumerate(suggested_prompts):
         with cols_llm_suggestions[i % 3]:
             if st.button(prompt_text, key=f"suggest_llm_{i}"):
-                set_question_and_submit_llm(prompt_text)
+                set_question_only(prompt_text)
 
     submit_button_clicked_llm = st.button("Generate SQL Query & Execute", key="manual_submit_llm")
 
-    if st.session_state.get('trigger_submit_llm', False):
-        submit_button_clicked_llm = True
-        st.session_state.trigger_submit_llm = False
-
     if submit_button_clicked_llm:
-        current_question_llm = st.session_state.question_input_value if st.session_state.question_input_value else user_typed_question
+        current_question_llm = st.session_state.main_input_text
         
         if current_question_llm.strip() == "":
             st.warning("Please enter a query or command, or choose a suggestion.")
         else:
             with st.spinner("Generating SQL query..."):
-                generated_sql_query = get_gemini_response(current_question_llm, LLM_PROMPT)
+                generated_sql_query = generate_sql_query_from_prompt(current_question_llm, LLM_SQL_GENERATION_PROMPT)
 
             if generated_sql_query and not generated_sql_query.startswith("Error:"):
                 st.subheader("Generated SQL Query:")

@@ -1,7 +1,7 @@
 # prompts.py
 
-# Define your prompt with both table schemas and examples
-LLM_PROMPT = [
+# --- Prompt for SQL Generation (Existing) ---
+LLM_SQL_GENERATION_PROMPT = [
     """
 You are an expert AI assistant specializing in converting natural language commands and questions into SQL queries.
 
@@ -94,3 +94,56 @@ Here are some examples of natural language questions and commands and their corr
 Now, generate an SQL query for the given question or command:
 """
 ]
+
+# --- Prompt for Patient History Summarization ---
+LLM_PATIENT_SUMMARY_PROMPT = """
+You are an AI medical assistant. Below is a patient's historical diagnostic and medication data.
+Please synthesize this information into a concise, human-readable summary of the patient's health journey.
+Include:
+- The patient's name.
+- A chronological overview of diagnoses and their dates.
+- Key test results mentioned.
+- Any medications prescribed, linking them to diagnoses if clear from the data.
+- Do NOT make medical recommendations or provide diagnoses not explicitly in the data.
+- If no data is available, state that.
+
+Patient Data:
+{patient_data}
+
+Provide the summary:
+"""
+
+# --- Prompt for Inventory Insights and Recommendations ---
+LLM_INVENTORY_INSIGHTS_PROMPT = """
+You are an AI inventory manager for a pharmacy. Analyze the following pharmacy inventory data.
+Identify:
+- Drugs with low stock (below 50 units).
+- Drugs expiring within the next 6 months (from today).
+- Any other notable trends or anomalies you observe (e.g., very high stock, very low price).
+
+Based on your analysis, provide actionable recommendations for inventory management.
+If no issues are found, state that the inventory appears healthy.
+
+Inventory Data (low stock/expiring):
+{inventory_data}
+
+Actionable Recommendations:
+"""
+
+# --- Prompt for Custom Data Report Generation ---
+LLM_REPORT_GENERATION_PROMPT = """
+You are an AI data analyst. You have been provided with data results from a SQL query in JSON-like format.
+Your task is to convert this raw data into a structured, human-readable report based on the user's original request.
+The report should:
+- Start with a clear title reflecting the report's purpose.
+- Present the data in a clear, organized manner (e.g., using bullet points, paragraphs, or a summary table if applicable).
+- Interpret key figures or trends.
+- Do not include the raw SQL query unless specifically requested by the user.
+
+User's Original Request: "{original_request}"
+
+Raw Data:
+{raw_data}
+
+Report:
+"""
