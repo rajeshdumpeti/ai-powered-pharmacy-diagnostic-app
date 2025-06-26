@@ -2,13 +2,14 @@
 import sqlite3
 import random
 from datetime import date, timedelta
-import streamlit as st # Used for st.error, st.warning within these functions
+import streamlit as st
+import bcrypt # Import bcrypt for password hashing
 
 DATABASE_FILE = 'student.db'
 
 def init_db():
-    """Initializes the SQLite database with PHARMACY_INVENTORY and DIAGNOSTIC_DATA tables,
-    and populates them with sample data if they are empty.
+    """Initializes the SQLite database with PHARMACY_INVENTORY, DIAGNOSTIC_DATA,
+    and USERS tables. Populates them with sample data if tables are empty.
     """
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
@@ -41,6 +42,16 @@ def init_db():
             FOREIGN KEY (DRUG_ID_PRESCRIBED) REFERENCES PHARMACY_INVENTORY(DRUG_ID)
         );
     """)
+
+    # Create USERS table for authentication
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS USERS (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            USERNAME TEXT UNIQUE NOT NULL,
+            PASSWORD_HASH TEXT NOT NULL
+        );
+    """)
+    conn.commit() # Commit table creation
 
     # --- Insert sample data into PHARMACY_INVENTORY if it's empty ---
     cursor.execute("SELECT COUNT(*) FROM PHARMACY_INVENTORY;")
@@ -75,7 +86,6 @@ def init_db():
         for drug_name, drug_id in cursor.fetchall():
             drug_id_map[drug_name] = drug_id
 
-        # Use a consistent set of Indian names
         patient_names = ["Amit Sharma", "Priya Singh", "Rahul Kumar", "Anjali Patel", "Vikram Reddy",
                          "Deepa Gupta", "Rohan Mehta", "Shweta Joshi", "Arjun Desai", "Neha Verma",
                          "Suresh Rao", "Meena Sharma", "Karan Singh", "Divya Reddy", "Rajesh Kumar",
@@ -90,14 +100,12 @@ def init_db():
         today = date.today()
 
         diagnostic_data_for_init = []
-        for _ in range(200): # Generate 200 records
+        for _ in range(200):
             patient_name = random.choice(patient_names)
             diagnosis = random.choice(diagnoses)
             diagnosis_date = today - timedelta(days=random.randint(1, 3 * 365))
             test_results = random.choice(test_results_options)
             
-            # Link to an existing drug or None
-            # Ensure drug_id_map has values before random.choice
             available_drug_ids = list(drug_id_map.values())
             drug_id_prescribed = random.choice(available_drug_ids + [None]) if available_drug_ids else None
 
@@ -138,6 +146,53 @@ def execute_sql_query(sql_query):
         st.error(f"Database error: {e}")
         st.code(sql_query, language="sql")
         return None, None
+    finally:
+        if conn:
+            conn.close()
+
+def add_user(username, password):
+    """Adds a new user to the USERS table with a hashed password.
+    Returns True on success, False if username exists or error.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        # Hash the password
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        cursor.execute("INSERT INTO USERS (USERNAME, PASSWORD_HASH) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        st.error("Username already exists. Please choose a different username.")
+        return False
+    except sqlite3.Error as e:
+        st.error(f"Database error during signup: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def verify_user(username, password):
+    """Verifies user credentials.
+    Returns True if username and password match, False otherwise.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT PASSWORD_HASH FROM USERS WHERE USERNAME = ?", (username,))
+        result = cursor.fetchone()
+        if result:
+            stored_password_hash = result[0]
+            # Check the provided password against the stored hash
+            if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
+                return True
+        return False
+    except sqlite3.Error as e:
+        st.error(f"Database error during login: {e}")
+        return False
     finally:
         if conn:
             conn.close()
