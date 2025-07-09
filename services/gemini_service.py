@@ -1,9 +1,9 @@
-# gemini_client.py
+# services/gemini_service.py
 import os
 import re
 import time
 import google.generativeai as genai
-import streamlit as st # For displaying Streamlit warnings/errors
+import streamlit as st
 
 from dotenv import load_dotenv
 
@@ -43,7 +43,6 @@ def generate_sql_query_from_prompt(question, prompt_template, max_retries=3, ini
                 st.warning(f"API quota exceeded (attempt {attempt + 1}/{max_retries}). Please wait a moment.")
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2 ** attempt)
-                    time.sleep(delay)
                 else:
                     st.error("Max retries reached for API call. Please try again later or check your Google API quotas.")
                     return "Error: API quota exceeded."
@@ -92,7 +91,6 @@ def get_llm_analysis_from_data(data_to_analyze, analysis_prompt_template, origin
                 st.warning(f"API quota exceeded (attempt {attempt + 1}/{max_retries}). Please wait a moment.")
                 if attempt < max_retries - 1:
                     delay = initial_delay * (2 ** attempt)
-                    time.sleep(delay)
                 else:
                     st.error("Max retries reached for analysis API call. Please try again later or check your Google API quotas.")
                     return "Error: API quota exceeded for analysis."
@@ -100,3 +98,91 @@ def get_llm_analysis_from_data(data_to_analyze, analysis_prompt_template, origin
                 st.error(f"An unexpected API error occurred during analysis: {e}")
                 return "Error: An API error occurred during analysis."
     return "Error: Failed to get analysis after multiple retries."
+
+
+def get_chatbot_response(user_query, chatbot_prompt_template, chat_history, max_retries=3, initial_delay=5):
+    """
+    Gets a conversational response from Gemini based on a user query and provided chat history.
+    """
+    if not configure_gemini():
+        return "Error: Gemini API not configured."
+
+    model = genai.GenerativeModel('models/gemini-2.0-flash')
+    
+    # Construct conversation history including the system prompt
+    convo = model.start_chat(history=[])
+
+    # Add the system prompt as an initial "user" instruction
+    convo.history.append({"role": "user", "parts": [chatbot_prompt_template]})
+    convo.history.append({"role": "model", "parts": ["Understood. I am ready to answer your questions about the database schema."]})
+
+    # Add previous chat history for context
+    for msg in chat_history:
+        role = "user" if msg["role"] == "user" else "model"
+        convo.history.append({"role": role, "parts": [msg["content"]]})
+
+
+    for attempt in range(max_retries):
+        try:
+            response = convo.send_message(user_query)
+            cleaned_response = response.text.strip()
+            return cleaned_response
+        except genai.types.BlockedPromptException as e:
+            st.error(f"The chatbot request was blocked: {e.safety_ratings}. Please try a different phrasing.")
+            return "I'm sorry, I cannot respond to that query due to safety guidelines. Please ask something different about the database structure."
+        except Exception as e:
+            if "ResourceExhausted" in str(e):
+                st.warning(f"Chatbot API quota exceeded (attempt {attempt + 1}/{max_retries}). Please wait a moment.")
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                else:
+                    st.error("Max retries reached for chatbot API call. Please try again later.")
+                    return "I'm experiencing high traffic. Please try asking again in a few moments."
+            else:
+                st.error(f"An unexpected API error occurred with the chatbot: {e}")
+                return "I'm sorry, an error occurred while processing your request. Please try again."
+    return "I'm having trouble connecting. Please try again later."
+
+
+def analyze_medical_image(image_data_base64, prompt, max_retries=3, initial_delay=5):
+    """
+    Analyzes a medical image using Gemini's vision capabilities.
+    image_data_base64: Base64 encoded string of the image.
+    prompt: Text prompt for the LLM to guide the analysis.
+    """
+    if not configure_gemini():
+        return "Error: Gemini API not configured."
+
+    model = genai.GenerativeModel('models/gemini-2.0-flash') # Gemini 2.0 Flash supports vision
+    
+    # Construct the content for the model
+    contents = [
+        {"role": "user", "parts": [
+            {"text": prompt},
+            {"inline_data": {
+                "mime_type": "image/jpeg", # Assuming JPEG for now, could be dynamic based on uploaded_file.type
+                "data": image_data_base64
+            }}
+        ]}
+    ]
+
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(contents)
+            cleaned_response = response.text.strip()
+            return cleaned_response
+        except genai.types.BlockedPromptException as e:
+            st.error(f"Image analysis request blocked: {e.safety_ratings}. Please ensure the image content is appropriate.")
+            return "Error: Image analysis blocked due to safety concerns. Please try a different image or refine your request."
+        except Exception as e:
+            if "ResourceExhausted" in str(e):
+                st.warning(f"Image analysis API quota exceeded (attempt {attempt + 1}/{max_retries}). Please wait a moment.")
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                else:
+                    st.error("Max retries reached for image analysis API call. Please try again later.")
+                    return "Error: Image analysis API quota exceeded."
+            else:
+                st.error(f"An unexpected API error occurred during image analysis: {e}")
+                return "Error: An API error occurred during image analysis."
+    return "Error: Failed to get image analysis after multiple retries."
