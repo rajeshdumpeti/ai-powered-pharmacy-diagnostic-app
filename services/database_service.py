@@ -123,3 +123,11 @@ def get_all_drugs_for_select():
     """Fetches all drug IDs and names for select boxes."""
     query = "SELECT DRUG_ID, DRUG_NAME FROM PHARMACY_INVENTORY ORDER BY DRUG_NAME ASC;"
     return execute_sql_query(query)
+
+def fetch_all_drug_names():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT DRUG_NAME FROM PHARMACY_INVENTORY ORDER BY DRUG_NAME ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in rows]
