@@ -1,5 +1,8 @@
-#libraries
-
 streamlit
 google-generativeai
 python-dotenv
+bcrypt
+pandas
+streamlit-persistence 
+Pillow
+FPDF
