@@ -2,7 +2,8 @@
 import streamlit as st
 
 def show_dashboard_page():
-    st.markdown("<h2 style='text-align: center; color: #008080;'>Welcome to Your AI-Powered Pharmacy & Diagnostics SQL Assistant!</h2>", unsafe_allow_html=True)
+    role = st.session_state.get("user_role", "Guest") 
+    st.markdown("<h2 style='text-align: center; color: #008080;'>Welcome to Your AI-Powered Assistant!</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>This application helps you efficiently manage pharmacy inventory and patient diagnostic data using the power of AI.</p>", unsafe_allow_html=True)
     st.markdown("---")
 
@@ -18,34 +19,34 @@ def show_dashboard_page():
     * **🤖 AI Chatbot:** Ask general questions about the database structure and what kind of data is stored.
     * **🖼️ Medical Image Analysis:** Upload medical images and get AI-powered descriptions and insights.
     """)
-    st.markdown("---")
+    # st.markdown("---")
 
-    st.subheader("Quick Shortcuts:")
-    col1, col2, col3 = st.columns(3)
+    # st.subheader("Quick Shortcuts:")
+    # col1, col2, col3 = st.columns(3)        
+    # print("Role:", role)  # Display the user's role
+    # with col1:
+    #     if st.button("Quick Drug Search", key="dashboard_shortcut_search"):
+    #         st.session_state.current_page = "quick_drug_search"
+    #         st.rerun()
+    #     if st.button("Add New Drug", key="dashboard_shortcut_add_drug"):
+    #         st.session_state.current_page = "add_drug"
+    #         st.rerun()
 
-    with col1:
-        if st.button("Quick Drug Search", key="dashboard_shortcut_search"):
-            st.session_state.current_page = "quick_drug_search"
-            st.rerun()
-        if st.button("Add New Drug", key="dashboard_shortcut_add_drug"):
-            st.session_state.current_page = "add_drug"
-            st.rerun()
+    # with col2:
+    #     if st.button("Add Diagnostic Record", key="dashboard_shortcut_add_diag"):
+    #         st.session_state.current_page = "add_diagnostic_record"
+    #         st.rerun()
+    #     if st.button("Natural Language Query", key="dashboard_shortcut_nlq"):
+    #         st.session_state.current_page = "natural_language_query"
+    #         st.rerun()
 
-    with col2:
-        if st.button("Add Diagnostic Record", key="dashboard_shortcut_add_diag"):
-            st.session_state.current_page = "add_diagnostic_record"
-            st.rerun()
-        if st.button("Natural Language Query", key="dashboard_shortcut_nlq"):
-            st.session_state.current_page = "natural_language_query"
-            st.rerun()
+    # with col3:
+    #     if st.button("Inventory Insights", key="dashboard_shortcut_inventory"):
+    #         st.session_state.current_page = "inventory_insights"
+    #         st.rerun()
+    #     if st.button("Patient Summary", key="dashboard_shortcut_patient"):
+    #         st.session_state.current_page = "patient_summary"
+    #         st.rerun()
 
-    with col3:
-        if st.button("Inventory Insights", key="dashboard_shortcut_inventory"):
-            st.session_state.current_page = "inventory_insights"
-            st.rerun()
-        if st.button("Patient Summary", key="dashboard_shortcut_patient"):
-            st.session_state.current_page = "patient_summary"
-            st.rerun()
-
-    st.markdown("---")
+    # st.markdown("---")
     st.info("Use the navigation menu on the left to access all features.")

@@ -11,11 +11,13 @@ def init_db():
     cursor = conn.cursor()
 
     # Create users table
+     # Create users table with role support
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            password TEXT NOT NULL,
+            role TEXT NOT NULL
         );
     """)
 
