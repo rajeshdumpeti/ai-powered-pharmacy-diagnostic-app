@@ -131,7 +131,7 @@ def send_otp_email(username, otp):
 
 # Auth UI
 def login_form_ui():
-    st.markdown("<h4 style='text-align: center; color: #008080;'>Login to your account</h4>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #FFFF;'>Login to your account</h4>", unsafe_allow_html=True)
 
     if not st.session_state.get("otp_pending"):
         with st.form("login_form"):
