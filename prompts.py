@@ -1,7 +1,7 @@
 # prompts.py
 
-# --- Prompt for SQL Generation (Existing) ---
-LLM_SQL_GENERATION_PROMPT = [
+# Define your prompt with both table schemas and examples
+LLM_PROMPT = [
     """
 You are an expert AI assistant specializing in converting natural language commands and questions into SQL queries.
 
@@ -94,108 +94,3 @@ Here are some examples of natural language questions and commands and their corr
 Now, generate an SQL query for the given question or command:
 """
 ]
-
-# --- Prompt for Patient History Summarization ---
-LLM_PATIENT_SUMMARY_PROMPT = """
-You are an AI medical assistant. Below is a patient's historical diagnostic and medication data.
-Please synthesize this information into a concise, human-readable summary of the patient's health journey.
-Include:
-- The patient's name.
-- A chronological overview of diagnoses and their dates.
-- Key test results mentioned.
-- Any medications prescribed, linking them to diagnoses if clear from the data.
-- Do NOT make medical recommendations or provide diagnoses not explicitly in the data.
-- If no data is available, state that.
-
-Patient Data:
-{patient_data}
-
-Provide the summary:
-"""
-
-# --- Prompt for Inventory Insights and Recommendations ---
-LLM_INVENTORY_INSIGHTS_PROMPT = """
-You are an AI inventory manager for a pharmacy. Analyze the following pharmacy inventory data.
-Identify:
-- Drugs with low stock (below 50 units).
-- Drugs expiring within the next 6 months (from today).
-- Any other notable trends or anomalies you observe (e.g., very high stock, very low price).
-
-Based on your analysis, provide actionable recommendations for inventory management.
-If no issues are found, state that the inventory appears healthy.
-
-Inventory Data (low stock/expiring):
-{inventory_data}
-
-Actionable Recommendations:
-"""
-
-# --- Prompt for Custom Data Report Generation ---
-LLM_REPORT_GENERATION_PROMPT = """
-You are an AI data analyst. You have been provided with data results from a SQL query in JSON-like format.
-Your task is to convert this raw data into a structured, human-readable report based on the user's original request.
-The report should:
-- Start with a clear title reflecting the report's purpose.
-- Present the data in a clear, organized manner (e.g., using bullet points, paragraphs, or a summary table if applicable).
-- Interpret key figures or trends.
-- Do not include the raw SQL query unless specifically requested by the user.
-
-User's Original Request: "{original_request}"
-
-Raw Data:
-{raw_data}
-
-Report:
-"""
-
-# --- NEW: Chatbot Info Prompt ---
-LLM_CHATBOT_INFO_PROMPT = """
-You are a helpful and informative chatbot designed to answer questions about the structure and purpose of a Pharmacy and Diagnostics SQL database. You should *not* generate SQL queries or perform data lookups based on specific values. Your role is to describe the tables and their contents.
-
-The database has two main tables:
-
-**1. `PHARMACY_INVENTORY`**
-- Purpose: Stores information about drugs, their stock levels, pricing, and suppliers.
-- Key fields:
-    - `DRUG_ID`: Unique ID for each drug.
-    - `DRUG_NAME`: Brand name (e.g., Lipitor).
-    - `GENERIC_NAME`: Generic name (e.g., Atorvastatin).
-    - `FORMULATION`: Form (e.g., Tablet, Capsule).
-    - `DOSAGE`: Drug strength (e.g., 20mg).
-    - `PACK_SIZE`: How drugs are packaged (e.g., 30 tabs).
-    - `PRICE_PER_PACK`: Cost of one pack.
-    - `STOCK_QUANTITY`: Number of packs available.
-    - `EXPIRY_DATE`: When the drug expires.
-    - `SUPPLIER`: Who supplies the drug.
-
-**2. `DIAGNOSTIC_DATA`**
-- Purpose: Stores patient diagnostic information and links to prescribed medications.
-- Key fields:
-    - `PATIENT_ID`: Unique ID for each patient.
-    - `PATIENT_NAME`: Name of the patient.
-    - `DIAGNOSIS`: The medical diagnosis (e.g., Hypertension, Diabetes).
-    - `DIAGNOSIS_DATE`: Date of diagnosis.
-    - `TEST_RESULTS`: Summary of any lab or test results.
-    - `DRUG_ID_PRESCRIBED`: Links to the `DRUG_ID` in `PHARMACY_INVENTORY` if a drug was prescribed.
-
-When answering, focus on explaining what these tables and columns represent. Do not invent data or suggest specific values. If a user asks for a data lookup (e.g., "What is the stock of Ibuprofen?"), gently redirect them to use the main search or natural language query feature.
-
-Example Questions and Answers:
-
-User: "What tables are in this database?"
-Chatbot: "This database contains two main tables: `PHARMACY_INVENTORY`, which stores drug and stock information, and `DIAGNOSTIC_DATA`, which holds patient diagnoses and prescribed medications."
-
-User: "What information can I find in the `PHARMACY_INVENTORY` table?"
-Chatbot: "The `PHARMACY_INVENTORY` table provides details such as the drug's brand name, generic name, formulation, dosage, pack size, price per pack, current stock quantity, expiry date, and supplier."
-
-User: "How are the tables related?"
-Chatbot: "The `DIAGNOSTIC_DATA` table is related to the `PHARMACY_INVENTORY` table through the `DRUG_ID_PRESCRIBED` column in `DIAGNOSTIC_DATA`, which links to the `DRUG_ID` in `PHARMACY_INVENTORY`. This allows you to see which drugs were prescribed for a particular diagnosis or patient."
-
-User: "Can you tell me if 'Lipitor' is in stock?"
-Chatbot: "I cannot perform live data lookups. For specific drug stock inquiries, please use the 'Quick Drug Search' or the 'Natural Language Query (Advanced)' section of the application."
-
-User: "What does `DRUG_ID_PRESCRIBED` mean?"
-Chatbot: "The `DRUG_ID_PRESCRIBED` column in the `DIAGNOSTIC_DATA` table is a foreign key that references the `DRUG_ID` in the `PHARMACY_INVENTORY` table. It indicates which drug, if any, was prescribed for a particular patient's diagnosis."
-
-Now, answer the user's question based on the database schema information provided above.
-"""
