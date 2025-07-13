@@ -7,6 +7,9 @@ from fpdf import FPDF
 from datetime import datetime
 from io import BytesIO
 import json
+import pandas as pd
+import plotly.express as px
+import time # New Import: Need time for time.sleep()
 
 # --- Configuration ---
 GST_RATE = 0.18
@@ -47,6 +50,32 @@ def get_next_invoice_id_and_prepare_db(customer_name, payment_method, invoice_it
     invoice_id = cursor.lastrowid
     conn.close()
     return invoice_id
+
+def get_monthly_invoice_data():
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='INVOICES';")
+    if not cursor.fetchone():
+        conn.close()
+        return pd.DataFrame()
+
+    cursor.execute("SELECT invoice_date, grand_total FROM INVOICES ORDER BY invoice_date;")
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows, columns=['invoice_date', 'grand_total'])
+    df['invoice_date'] = pd.to_datetime(df['invoice_date'])
+    df['month_year'] = df['invoice_date'].dt.to_period('M').astype(str)
+    monthly_sales = df.groupby('month_year')['grand_total'].sum().reset_index()
+    monthly_sales.columns = ['Month', 'Total Sales']
+    monthly_sales['Month_Sort'] = pd.to_datetime(monthly_sales['Month'])
+    monthly_sales = monthly_sales.sort_values('Month_Sort').drop(columns='Month_Sort')
+
+    return monthly_sales
+
 
 # --- PDF Generation Function ---
 def create_invoice_pdf(invoice_id, customer_name, payment_method, items, subtotal, gst, grand_total):
@@ -144,7 +173,6 @@ def show_billing_page():
                 "quantity": quantity_to_add,
                 "price_per_pack": selected_drug_info["price_per_pack"]
             }
-            # Check if drug is already in the list, if so, update quantity
             found = False
             for item in st.session_state.current_invoice_items:
                 if item["drug_id"] == item_to_add["drug_id"]:
@@ -172,11 +200,10 @@ def show_billing_page():
             })
         st.dataframe(items_df, use_container_width=True, hide_index=True)
 
-        # Remove item buttons (one per row)
         for i in range(len(st.session_state.current_invoice_items)):
             if st.button(f"🗑️ Remove {st.session_state.current_invoice_items[i]['drug_name']}", key=f"remove_item_{i}"):
                 del st.session_state.current_invoice_items[i]
-                st.rerun() # Rerun to update the displayed list immediately
+                st.rerun()
 
         st.markdown(f"**Calculated Subtotal: {format_currency(total_subtotal)}**")
         calculated_gst = total_subtotal * GST_RATE
@@ -215,7 +242,6 @@ def show_billing_page():
 
             if invoice_id is None:
                 st.error("Could not generate invoice ID or save invoice to database.")
-                # No rerun here, let user see error
                 return
 
             pdf_data = create_invoice_pdf(
@@ -237,8 +263,10 @@ def show_billing_page():
                     mime="application/pdf"
                 )
 
-    # Optionally, provide a button to start a new invoice
-            if st.button("Start New Invoice"):
+
+                # Add a small delay to ensure the download button renders before rerun
+                time.sleep(0.4) # <-- This was missing!
+
                 st.session_state.current_invoice_items = []
                 st.session_state.invoice_patient_name = ""
                 st.session_state.invoice_payment_mode = "Cash"
@@ -248,3 +276,21 @@ def show_billing_page():
 
     st.markdown("---")
     st.markdown("<p style='font-size: small; color: gray;'>Add multiple drugs using the 'Add Item' button, then finalize the invoice.</p>", unsafe_allow_html=True)
+
+    # --- New Section for Monthly Invoice Chart ---
+    st.markdown("## 📈 Monthly Invoice Trends")
+    monthly_sales_df = get_monthly_invoice_data()
+
+    if not monthly_sales_df.empty:
+        fig = px.bar(
+            monthly_sales_df,
+            x='Month',
+            y='Total Sales',
+            title='Monthly Total Sales',
+            labels={'Month': 'Month', 'Total Sales': 'Total Sales (₹)'},
+            hover_data={'Total Sales': ':.2f'}
+        )
+        fig.update_layout(xaxis_title="Month", yaxis_title="Total Sales (₹)", showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No invoice data available to display monthly trends yet.")
