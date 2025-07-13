@@ -3,3 +3,10 @@
 streamlit
 google-generativeai
 python-dotenv
+bcrypt
+pandas
+streamlit-persistence 
+Pillow
+FPDF
+pandas 
+plotly
