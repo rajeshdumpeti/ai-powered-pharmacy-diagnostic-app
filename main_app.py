@@ -69,6 +69,8 @@ if 'otp_username' not in st.session_state: # Initialize otp_username
     st.session_state.otp_username = ""
 if 'otp_user_role' not in st.session_state: # Initialize otp_user_role
     st.session_state.otp_user_role = ""
+if "prompt_history" not in st.session_state:
+    st.session_state["prompt_history"] = []
 
 # Load session state from file immediately after basic initialization
 load_session_state_manual()
@@ -265,9 +267,6 @@ with st.sidebar:
         if st.button("Inventory Insights", key="nav_inventory_insights"):
             st.session_state.current_page = "inventory_insights"
             st.rerun()
-        if st.button("Custom Data Report", key="nav_custom_report"):
-            st.session_state.current_page = "custom_report"
-            st.rerun()
         if st.button("Checkout / Billing"):
             st.session_state.current_page = "billing"
             st.rerun()
@@ -285,6 +284,9 @@ with st.sidebar:
             st.rerun()
         if st.button("Medical Image Analysis", key="nav_image_analysis"):
             st.session_state.current_page = "image_analysis"
+            st.rerun()
+        if st.button("Custom Data Report", key="nav_custom_report"):
+            st.session_state.current_page = "custom_report"
             st.rerun()
 
     # Admin and Doctor for Delete Record

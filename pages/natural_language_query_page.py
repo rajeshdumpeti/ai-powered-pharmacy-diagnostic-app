@@ -22,13 +22,6 @@ def show_natural_language_query_page():
         "Which drugs are expiring before 2026-12-31?",
         "List patient names with a 'Diabetes Type 2' diagnosis.",
         "What drugs were prescribed for patients diagnosed with 'Asthma'?",
-        "Show the diagnosis and prescribed drug for patient Amit Sharma.",
-        "How many diagnoses were made in 2024?",
-        "Sell 5 packs of Ibuprofen 200mg tablets.",
-        "Restock 15 packs of Metformin 500mg tablets.",
-        "What is the stock quantity for Lipitor 20mg tablets?",
-        "Add a new drug: Ibuprofen, Ibuprofen, Tablet, 400mg, 50 tabs, 4.00 price, 200 stock, 2027-01-01 expiry, supplied by GenericMeds.",
-        "Delete drug with DRUG_ID 1."
     ]
 
     def set_question_only(prompt_text):
