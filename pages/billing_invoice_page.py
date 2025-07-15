@@ -11,8 +11,7 @@ import json
 # --- Configuration ---
 GST_RATE = 0.18
 DATABASE_FILE = os.path.join("data", "pharmacy_db.db")
-FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "DejaVuSans.ttf")
-
+FONT_PATH = os.path.join(os.path.dirname(__file__), '../fonts/DejaVuSans.ttf')
 # --- Helper Functions ---
 def format_currency(amount):
     """Formats a float as a currency string with Rupee symbol."""
